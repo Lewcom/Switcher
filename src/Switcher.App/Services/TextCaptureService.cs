@@ -4,7 +4,6 @@ namespace Switcher.App.Services;
 
 internal sealed class TextCaptureService
 {
-    private const uint WmCopy = 0x0301;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
@@ -73,7 +72,7 @@ internal sealed class TextCaptureService
 
     private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
     {
-        // Strategy 1: SendKeys
+        // Primary strategy.
         SendKeys.SendWait("^c");
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
@@ -81,24 +80,13 @@ internal sealed class TextCaptureService
             return true;
         }
 
-        // Strategy 2: SendInput
+        // Single fallback strategy.
         SendCtrlCViaInput();
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
+            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}).");
             AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
             return true;
-        }
-
-        // Strategy 3: WM_COPY to foreground window
-        var foreground = GetForegroundWindow();
-        if (foreground != IntPtr.Zero)
-        {
-            SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
-            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
-            {
-                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
-                return true;
-            }
         }
 
         return false;
@@ -165,12 +153,6 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

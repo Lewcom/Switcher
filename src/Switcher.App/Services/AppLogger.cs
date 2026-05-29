@@ -3,6 +3,7 @@ namespace Switcher.App.Services;
 internal static class AppLogger
 {
     private static readonly object SyncRoot = new();
+    private static readonly bool TraceEnabled = IsTraceEnabled();
     private static readonly string LogDirectory =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Switcher", "logs");
     private static readonly string LogFilePath = Path.Combine(LogDirectory, "app.log");
@@ -20,6 +21,11 @@ internal static class AppLogger
 
     public static void Step(string operationId, string step, string details)
     {
+        if (!TraceEnabled)
+        {
+            return;
+        }
+
         Write("TRACE", $"op={operationId} step={step} {details}");
     }
 
@@ -54,5 +60,12 @@ internal static class AppLogger
         {
             // Never crash app because logging failed.
         }
+    }
+
+    private static bool IsTraceEnabled()
+    {
+        var value = Environment.GetEnvironmentVariable("SWITCHER_DEBUG_TRACE");
+        return string.Equals(value, "1", StringComparison.Ordinal) ||
+               string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 }

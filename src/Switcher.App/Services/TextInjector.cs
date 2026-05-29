@@ -26,6 +26,11 @@ internal sealed class TextInjector
         }
 
         var unicodeResult = TryTypeUnicode(replacement);
+        if (unicodeResult)
+        {
+            AppLogger.Info($"Inject fallback used for op={operationId} (unicode typing).");
+        }
+
         AppLogger.Step(
             operationId,
             "inject_unicode",
