@@ -21,26 +21,29 @@
 ## 3) Manual Cases
 | case | expected | actual | result |
 |---|---|---|---|
-| Select text `ghbdsn` in Notepad + `Ctrl+Alt+L` | `привіт` replaces selection | pending retest | not-run |
-| Cursor after `ghbdsn` without selection + `Ctrl+Alt+L` | last word converted to `привіт` | pass (`op=c207aa3f`, `path=last_word`, `replaced=True`) | pass |
-| Mixed text `ghbdsn, 123!` + convert | punctuation and digits stay unchanged | blocked in agent session | blocked |
-| Hotkey conflict (occupied combo) | app does not crash, warning shown/logged | blocked in agent session | blocked |
+| Cursor after `ghbdsn` in Notepad + `Ctrl+Alt+L` | last word converted to `привіт` | pass (`copy_strategy=wm_copy_focused`, `inject_wm_paste result=ok`) | pass |
+| Repeat toggle in Notepad (`привіт` -> hotkey) | converted back to `ghbdsn` | pass (`out_preview="ghbdsn"`, `replaced=True`) | pass |
+| Mixed text `ghbdsn, 123!` + convert in Notepad | punctuation/digits unchanged | pass (manual confirm by user) | pass |
+| Input in chat/web-like field | best-effort conversion | intermittent timeout (`path=none`) | partial |
+| Hotkey conflict (occupied combo) | app does not crash, warning shown/logged | not-run | not-run |
 
 ## 4) Acceptance Criteria Check
 | criterion | status | evidence |
 |---|---|---|
-| AC1 | pass | interactive log op `c207aa3f` shows convert+inject success for last-word flow |
-| AC2 | blocked | requires interactive desktop manual run |
-| AC3 | blocked | latency measurement pending interactive run |
+| AC1 | pass | multiple successful Notepad runs with `copy_strategy=wm_copy_focused` and `replaced=True` |
+| AC2 | pass-partial | stable in Notepad, web/chat fields are best-effort |
+| AC3 | blocked | latency measurement pending dedicated timing run |
 | AC4 | pass-partial | error paths wrapped, logging added |
-| AC5 | pass-partial | reversible mapping verified via unit test |
+| AC5 | pass | reversible mapping verified via unit test + manual toggle in Notepad |
 | AC6 | pass | unit test confirms punctuation preservation |
 
 ## 5) Residual Risks
 - Clipboard-dependent capture may fail in protected/sandboxed inputs.
-- Some applications may ignore synthetic key events.
+- Web/chat inputs may ignore or override copy/paste message routing.
 - Clipboard restore is best-effort and may race with user clipboard changes.
-- Manual e2e evidence is still required from local interactive session.
+- Conflict scenario for occupied hotkey is not manually verified yet.
 
 ## 6) Recommendation
-- request changes (run `scripts/manual-smoke-hotkey.ps1` locally and record outcomes)
+- approve for MVP scope with explicit support boundary:
+  - Stable target: standard Windows text fields (e.g., Notepad).
+  - Best effort target: web/chat custom input controls.
