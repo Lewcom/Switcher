@@ -4,9 +4,9 @@ namespace Switcher.App.Services;
 
 internal sealed class TextCaptureService
 {
+    private const uint WmCopy = 0x0301;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
-    private const uint WmCopy = 0x0301;
 
     public string? TryGetSelectedText(string operationId)
     {
@@ -38,15 +38,12 @@ internal sealed class TextCaptureService
             prepareSelection?.Invoke();
             Thread.Sleep(40);
 
-            if (TryCaptureFromClipboard(sentinel, operationId, stepName, out var strategy))
+            if (TryCaptureFromClipboard(sentinel, operationId, stepName))
             {
-                AppLogger.Info($"Copy success for op={operationId} step={stepName} strategy={strategy}.");
                 return Clipboard.GetText();
             }
 
             var finalText = Clipboard.ContainsText() ? Clipboard.GetText() : "<non-text>";
-            AppLogger.Info(
-                $"Copy failed for op={operationId} step={stepName} reason=clipboard_timeout preview=\"{AppLogger.Preview(finalText)}\".");
             AppLogger.Step(
                 operationId,
                 stepName,
@@ -74,33 +71,34 @@ internal sealed class TextCaptureService
         }
     }
 
-    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, out string strategy)
+    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
     {
-        strategy = "none";
+        // Strategy 1: SendKeys
+        SendKeys.SendWait("^c");
+        if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+        {
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
+            return true;
+        }
 
-        // Primary strategy.
+        // Strategy 2: SendInput
         SendCtrlCViaInput();
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            strategy = "sendinput";
             AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
             return true;
         }
 
-        // Single fallback strategy (no SendKeys to avoid literal 'c' injection).
+        // Strategy 3: WM_COPY to foreground window
         var foreground = GetForegroundWindow();
-        if (foreground == IntPtr.Zero)
+        if (foreground != IntPtr.Zero)
         {
-            return false;
-        }
-
-        SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
-        if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
-        {
-            strategy = "wm_copy_foreground";
-            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}, wm_copy_foreground).");
-            AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
-            return true;
+            SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
+                return true;
+            }
         }
 
         return false;
