@@ -8,14 +8,14 @@ internal sealed class TextCaptureService
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
-    public string? TryGetSelectedText(string operationId)
+    public string? TryGetSelectedText(string operationId, IntPtr targetWindow)
     {
-        return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected");
+        return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected", targetWindow);
     }
 
-    public string? TryGetLastWordBySelection(string operationId)
+    public string? TryGetLastWordBySelection(string operationId, IntPtr targetWindow)
     {
-        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord, operationId, "capture_last_word");
+        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord, operationId, "capture_last_word", targetWindow);
         if (captured is null)
         {
             CollapseSelectionToCaret();
@@ -25,20 +25,21 @@ internal sealed class TextCaptureService
         return captured;
     }
 
-    private static string? CaptureCopiedText(Action? prepareSelection, string operationId, string stepName)
+    private static string? CaptureCopiedText(Action? prepareSelection, string operationId, string stepName, IntPtr targetWindow)
     {
         IDataObject? previousClipboard = null;
         var sentinel = "__sw_capture_" + Guid.NewGuid().ToString("N");
         try
         {
             KeyboardStateService.NormalizeAfterHotkey();
+            FocusTargetWindow(targetWindow);
             previousClipboard = Clipboard.GetDataObject();
             Clipboard.SetText(sentinel);
 
             prepareSelection?.Invoke();
             Thread.Sleep(40);
 
-            if (TryCaptureFromClipboard(sentinel, operationId, stepName))
+            if (TryCaptureFromClipboard(sentinel, operationId, stepName, targetWindow))
             {
                 return Clipboard.GetText();
             }
@@ -71,21 +72,23 @@ internal sealed class TextCaptureService
         }
     }
 
-    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
+    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, IntPtr targetWindow)
     {
-        // Strategy 1: SendKeys
-        SendKeys.SendWait("^c");
+        FocusTargetWindow(targetWindow);
+        // Strategy 1: SendInput Ctrl+Insert
+        SendCopyViaInput(useInsert: true);
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput_ctrl_insert");
             return true;
         }
 
-        // Strategy 2: SendInput
-        SendCtrlCViaInput();
+        FocusTargetWindow(targetWindow);
+        // Strategy 2: SendInput Ctrl+C
+        SendCopyViaInput(useInsert: false);
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput_ctrl_c");
             return true;
         }
 
@@ -124,13 +127,14 @@ internal sealed class TextCaptureService
         return false;
     }
 
-    private static void SendCtrlCViaInput()
+    private static void SendCopyViaInput(bool useInsert)
     {
+        var key = useInsert ? Keys.Insert : Keys.C;
         var inputs = new[]
         {
             CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
-            CreateVirtualKeyInput(Keys.C, keyUp: false),
-            CreateVirtualKeyInput(Keys.C, keyUp: true),
+            CreateVirtualKeyInput(key, keyUp: false),
+            CreateVirtualKeyInput(key, keyUp: true),
             CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
         };
 
@@ -145,6 +149,15 @@ internal sealed class TextCaptureService
     private static void SelectPreviousWord()
     {
         SendKeys.SendWait("^+{LEFT}");
+    }
+
+    private static void FocusTargetWindow(IntPtr targetWindow)
+    {
+        if (targetWindow != IntPtr.Zero)
+        {
+            SetForegroundWindow(targetWindow);
+            Thread.Sleep(15);
+        }
     }
 
     private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
@@ -165,6 +178,9 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();

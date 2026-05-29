@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.InteropServices;
 using Switcher.App.Services;
 using Switcher.Core;
 
@@ -70,14 +71,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private async void OnHotkeyPressed(object? sender, EventArgs e)
     {
         var operationId = Guid.NewGuid().ToString("N")[..8];
+        var targetWindow = GetForegroundWindow();
         try
         {
             AppLogger.Step(operationId, "hotkey_start", "combo=Ctrl+Alt+L");
             KeyboardStateService.WaitForModifierRelease();
             await Task.Delay(40);
             KeyboardStateService.NormalizeAfterHotkey();
+            if (targetWindow != IntPtr.Zero)
+            {
+                SetForegroundWindow(targetWindow);
+            }
 
-            var selectedText = _textCaptureService.TryGetSelectedText(operationId);
+            var selectedText = _textCaptureService.TryGetSelectedText(operationId, targetWindow);
             if (!string.IsNullOrEmpty(selectedText))
             {
                 var converted = _layoutConverter.Convert(selectedText);
@@ -86,12 +92,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
                     "convert_selected",
                     $"in_len={selectedText.Length} out_len={converted.Length} out_preview=\"{AppLogger.Preview(converted)}\"");
 
-                var replaced = _textInjector.ReplaceSelection(converted, operationId);
+                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow);
                 AppLogger.Step(operationId, "done", $"path=selected replaced={replaced}");
                 return;
             }
 
-            var lastWord = _textCaptureService.TryGetLastWordBySelection(operationId);
+            var lastWord = _textCaptureService.TryGetLastWordBySelection(operationId, targetWindow);
             if (!string.IsNullOrEmpty(lastWord))
             {
                 var converted = _layoutConverter.Convert(lastWord);
@@ -100,7 +106,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                     "convert_last_word",
                     $"in_len={lastWord.Length} out_len={converted.Length} out_preview=\"{AppLogger.Preview(converted)}\"");
 
-                var replaced = _textInjector.ReplaceSelection(converted, operationId);
+                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow);
                 AppLogger.Step(operationId, "done", $"path=last_word replaced={replaced}");
                 return;
             }
@@ -113,4 +119,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             AppLogger.Error($"Hotkey processing failed for op={operationId}.", ex);
         }
     }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }

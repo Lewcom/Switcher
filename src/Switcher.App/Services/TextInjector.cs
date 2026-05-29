@@ -9,12 +9,14 @@ internal sealed class TextInjector
     private const uint KeyeventfKeyup = 0x0002;
     private const uint KeyeventfUnicode = 0x0004;
 
-    public bool ReplaceSelection(string replacement, string operationId)
+    public bool ReplaceSelection(string replacement, string operationId, IntPtr targetWindow)
     {
         if (replacement is null)
         {
             throw new ArgumentNullException(nameof(replacement));
         }
+
+        FocusTargetWindow(targetWindow);
 
         if (TryPasteViaClipboard(replacement))
         {
@@ -33,6 +35,15 @@ internal sealed class TextInjector
                 ? $"result=ok length={replacement.Length} preview=\"{AppLogger.Preview(replacement)}\""
                 : "result=fail");
         return unicodeResult;
+    }
+
+    private static void FocusTargetWindow(IntPtr targetWindow)
+    {
+        if (targetWindow != IntPtr.Zero)
+        {
+            SetForegroundWindow(targetWindow);
+            Thread.Sleep(15);
+        }
     }
 
     private static bool TryTypeUnicode(string text)
@@ -118,6 +129,9 @@ internal sealed class TextInjector
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
