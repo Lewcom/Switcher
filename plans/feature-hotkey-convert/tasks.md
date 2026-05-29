@@ -15,7 +15,7 @@
 | T4 | Реалізувати `TextInjector` (SendInput + clipboard fallback) | implementer | 2h | done | Текст замінюється у 2+ типових застосунках |
 | T5 | Реалізувати flow `selection-first`, інакше `last-word` | implementer | 2h | done | AC1, AC2 виконуються у ручних smoke-кейсах |
 | T6 | Додати логування помилок і graceful handling | implementer | 1h | done | При невдачі немає крашу, є інформативний лог |
-| T7 | Написати verify-документ і пройти ручний тест-набір | tester | 1.5h | todo | `verify.md` заповнено, ризики зафіксовані |
+| T7 | Написати verify-документ і пройти ручний тест-набір | tester | 1.5h | in_progress | `verify.md` заповнено, ризики зафіксовані |
 
 ## Notes
 - Блокери:
