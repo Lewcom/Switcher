@@ -1,5 +1,6 @@
 using System.Drawing;
 using Switcher.App.Services;
+using Switcher.Core;
 
 namespace Switcher.App;
 
@@ -7,33 +8,53 @@ internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon _notifyIcon;
     private readonly HotkeyService _hotkeyService;
+    private readonly LayoutConverter _layoutConverter;
+    private readonly TextCaptureService _textCaptureService;
+    private readonly TextInjector _textInjector;
 
     public TrayApplicationContext()
     {
-        var exitItem = new ToolStripMenuItem("Exit");
-        exitItem.Click += (_, _) => ExitThread();
-
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(exitItem);
-
-        _notifyIcon = new NotifyIcon
+        try
         {
-            Text = "Switcher (v1 skeleton)",
-            Icon = SystemIcons.Application,
-            ContextMenuStrip = menu,
-            Visible = true
-        };
+            var exitItem = new ToolStripMenuItem("Exit");
+            exitItem.Click += (_, _) => ExitThread();
 
-        _hotkeyService = new HotkeyService(Keys.L, control: true, alt: true);
-        _hotkeyService.HotkeyPressed += OnHotkeyPressed;
+            var menu = new ContextMenuStrip();
+            menu.Items.Add(exitItem);
 
-        if (!_hotkeyService.IsRegistered)
+            _notifyIcon = new NotifyIcon
+            {
+                Text = "Switcher",
+                Icon = SystemIcons.Application,
+                ContextMenuStrip = menu,
+                Visible = true
+            };
+
+            _layoutConverter = new LayoutConverter();
+            _textCaptureService = new TextCaptureService();
+            _textInjector = new TextInjector();
+
+            _hotkeyService = new HotkeyService(Keys.L, control: true, alt: true);
+            _hotkeyService.HotkeyPressed += OnHotkeyPressed;
+
+            if (!_hotkeyService.IsRegistered)
+            {
+                AppLogger.Error("Hotkey Ctrl+Alt+L is busy or unavailable.");
+                _notifyIcon.ShowBalloonTip(
+                    2000,
+                    "Switcher",
+                    "Hotkey Ctrl+Alt+L is busy or unavailable.",
+                    ToolTipIcon.Warning);
+            }
+            else
+            {
+                AppLogger.Info("Hotkey Ctrl+Alt+L registered successfully.");
+            }
+        }
+        catch (Exception ex)
         {
-            _notifyIcon.ShowBalloonTip(
-                2000,
-                "Switcher",
-                "Hotkey Ctrl+Alt+L is busy or unavailable.",
-                ToolTipIcon.Warning);
+            AppLogger.Error("Tray application initialization failed.", ex);
+            throw;
         }
     }
 
@@ -48,10 +69,32 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
     {
-        _notifyIcon.ShowBalloonTip(
-            1000,
-            "Switcher",
-            "Hotkey pressed: Ctrl+Alt+L",
-            ToolTipIcon.Info);
+        try
+        {
+            var selectedText = _textCaptureService.TryGetSelectedText();
+            if (!string.IsNullOrEmpty(selectedText))
+            {
+                var converted = _layoutConverter.Convert(selectedText);
+                _textInjector.ReplaceSelection(converted);
+                AppLogger.Info("Converted currently selected text.");
+                return;
+            }
+
+            var lastWord = _textCaptureService.TryGetLastWordBySelection();
+            if (!string.IsNullOrEmpty(lastWord))
+            {
+                var converted = _layoutConverter.Convert(lastWord);
+                _textInjector.ReplaceSelection(converted);
+                AppLogger.Info("Converted previous word near caret.");
+                return;
+            }
+
+            AppLogger.Info("Hotkey pressed but nothing to convert.");
+            _notifyIcon.ShowBalloonTip(1200, "Switcher", "Nothing to convert.", ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Hotkey processing failed.", ex);
+        }
     }
 }
