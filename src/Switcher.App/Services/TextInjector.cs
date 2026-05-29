@@ -92,7 +92,7 @@ internal sealed class TextInjector
             previousClipboard = Clipboard.GetDataObject();
             Clipboard.SetDataObject(text, true);
             Thread.Sleep(20);
-            SendCtrlKey(Keys.V);
+            SendKeys.SendWait("^v");
             Thread.Sleep(20);
             return true;
         }
@@ -114,35 +114,6 @@ internal sealed class TextInjector
                 }
             }
         }
-    }
-
-    private static void SendCtrlKey(Keys key)
-    {
-        var inputs = new[]
-        {
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
-            CreateVirtualKeyInput(key, keyUp: false),
-            CreateVirtualKeyInput(key, keyUp: true),
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
-        };
-
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-    }
-
-    private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
-    {
-        return new INPUT
-        {
-            type = InputKeyboard,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = (ushort)key,
-                    dwFlags = keyUp ? KeyeventfKeyup : 0
-                }
-            }
-        };
     }
 
     [DllImport("user32.dll", SetLastError = true)]

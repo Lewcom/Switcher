@@ -4,9 +4,6 @@ namespace Switcher.App.Services;
 
 internal sealed class TextCaptureService
 {
-    private const uint InputKeyboard = 1;
-    private const uint KeyeventfKeyup = 0x0002;
-
     public string? TryGetSelectedText(string operationId)
     {
         return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected");
@@ -103,86 +100,26 @@ internal sealed class TextCaptureService
 
     private static void CollapseSelectionToCaret()
     {
-        var inputs = new[]
-        {
-            CreateVirtualKeyInput(Keys.Right, keyUp: false),
-            CreateVirtualKeyInput(Keys.Right, keyUp: true)
-        };
-
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        SendKeys.SendWait("{RIGHT}");
     }
 
     private static void SelectPreviousWord()
     {
-        var inputs = new[]
-        {
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
-            CreateVirtualKeyInput(Keys.ShiftKey, keyUp: false),
-            CreateVirtualKeyInput(Keys.Left, keyUp: false),
-            CreateVirtualKeyInput(Keys.Left, keyUp: true),
-            CreateVirtualKeyInput(Keys.ShiftKey, keyUp: true),
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
-        };
-
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        SendKeys.SendWait("^+{LEFT}");
     }
 
     private static void SendCtrlKey(Keys key)
     {
-        var inputs = new[]
+        if (key == Keys.C)
         {
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
-            CreateVirtualKeyInput(key, keyUp: false),
-            CreateVirtualKeyInput(key, keyUp: true),
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
-        };
-
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-    }
-
-    private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
-    {
-        return new INPUT
+            SendKeys.SendWait("^c");
+        }
+        else
         {
-            type = InputKeyboard,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = (ushort)key,
-                    dwFlags = keyUp ? KeyeventfKeyup : 0
-                }
-            }
-        };
+            SendKeys.SendWait("^" + key.ToString().ToLowerInvariant());
+        }
     }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public uint type;
-        public InputUnion U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)]
-        public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
 }
