@@ -67,10 +67,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         base.ExitThreadCore();
     }
 
-    private void OnHotkeyPressed(object? sender, EventArgs e)
+    private async void OnHotkeyPressed(object? sender, EventArgs e)
     {
         try
         {
+            await Task.Delay(40);
+            KeyboardStateService.NormalizeAfterHotkey();
+
             var selectedText = _textCaptureService.TryGetSelectedText();
             if (!string.IsNullOrEmpty(selectedText))
             {

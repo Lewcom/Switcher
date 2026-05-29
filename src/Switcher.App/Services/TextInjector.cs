@@ -16,6 +16,8 @@ internal sealed class TextInjector
             throw new ArgumentNullException(nameof(replacement));
         }
 
+        KeyboardStateService.NormalizeAfterHotkey();
+
         if (TryTypeUnicode(replacement))
         {
             return true;

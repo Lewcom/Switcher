@@ -22,6 +22,7 @@ internal sealed class TextCaptureService
         IDataObject? previousClipboard = null;
         try
         {
+            KeyboardStateService.NormalizeAfterHotkey();
             previousClipboard = Clipboard.GetDataObject();
             Clipboard.Clear();
 
