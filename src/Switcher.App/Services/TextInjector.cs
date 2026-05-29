@@ -16,14 +16,12 @@ internal sealed class TextInjector
             throw new ArgumentNullException(nameof(replacement));
         }
 
-        KeyboardStateService.NormalizeAfterHotkey();
-
-        if (TryTypeUnicode(replacement))
+        if (TryPasteViaClipboard(replacement))
         {
             return true;
         }
 
-        return TryPasteViaClipboard(replacement);
+        return TryTypeUnicode(replacement);
     }
 
     private static bool TryTypeUnicode(string text)
@@ -82,7 +80,9 @@ internal sealed class TextInjector
         {
             previousClipboard = Clipboard.GetDataObject();
             Clipboard.SetText(text);
+            Thread.Sleep(20);
             SendCtrlKey(Keys.V);
+            Thread.Sleep(20);
             return true;
         }
         catch

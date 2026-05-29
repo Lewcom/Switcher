@@ -10,13 +10,12 @@ internal static class KeyboardStateService
 
     public static void NormalizeAfterHotkey()
     {
-        // Release possible stuck modifiers from global hotkey and close menu mode.
+        // Release possible stuck modifiers from global hotkey.
         SendKeyUp(Keys.ControlKey);
         SendKeyUp(Keys.Menu);
         SendKeyUp(Keys.ShiftKey);
         SendKeyUp(Keys.LWin);
         SendKeyUp(Keys.RWin);
-        SendPress(Keys.Escape);
     }
 
     public static void WaitForModifierRelease(int timeoutMs = 500)
@@ -35,17 +34,6 @@ internal static class KeyboardStateService
 
             Thread.Sleep(10);
         }
-    }
-
-    private static void SendPress(Keys key)
-    {
-        var inputs = new[]
-        {
-            CreateVirtualKeyInput(key, keyUp: false),
-            CreateVirtualKeyInput(key, keyUp: true)
-        };
-
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
     private static void SendKeyUp(Keys key)
