@@ -75,6 +75,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         try
         {
             AppLogger.Step(operationId, "hotkey_start", "combo=Ctrl+Alt+L");
+            AppLogger.Info($"Window context op={operationId}: {WindowDiagnosticsService.DescribeWindowContext(targetWindow)}");
             KeyboardStateService.WaitForModifierRelease();
             await Task.Delay(40);
             KeyboardStateService.NormalizeAfterHotkey();
