@@ -14,31 +14,48 @@ internal sealed class TextCaptureService
 
     public string? TryGetLastWordBySelection()
     {
-        return CaptureCopiedText(prepareSelection: SelectPreviousWord);
+        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord);
+        if (captured is null)
+        {
+            CollapseSelectionToCaret();
+        }
+
+        return captured;
     }
 
     private static string? CaptureCopiedText(Action? prepareSelection)
     {
         IDataObject? previousClipboard = null;
+        var initialClipboardSeq = GetClipboardSequenceNumber();
         try
         {
             KeyboardStateService.NormalizeAfterHotkey();
             previousClipboard = Clipboard.GetDataObject();
-            Clipboard.Clear();
 
             prepareSelection?.Invoke();
             Thread.Sleep(30);
 
             SendCtrlKey(Keys.C);
-            Thread.Sleep(80);
-
-            if (!Clipboard.ContainsText())
+            if (!WaitForClipboardChange(initialClipboardSeq, 250))
             {
                 return null;
             }
 
-            var text = Clipboard.GetText();
-            return string.IsNullOrEmpty(text) ? null : text;
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                if (Clipboard.ContainsText())
+                {
+                    var text = Clipboard.GetText();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        return text;
+                    }
+                }
+
+                Thread.Sleep(30);
+            }
+
+            return null;
         }
         catch
         {
@@ -58,6 +75,33 @@ internal sealed class TextCaptureService
                 }
             }
         }
+    }
+
+    private static bool WaitForClipboardChange(uint initialSequence, int timeoutMs)
+    {
+        var started = Environment.TickCount;
+        while (Environment.TickCount - started < timeoutMs)
+        {
+            if (GetClipboardSequenceNumber() != initialSequence)
+            {
+                return true;
+            }
+
+            Thread.Sleep(10);
+        }
+
+        return false;
+    }
+
+    private static void CollapseSelectionToCaret()
+    {
+        var inputs = new[]
+        {
+            CreateVirtualKeyInput(Keys.Right, keyUp: false),
+            CreateVirtualKeyInput(Keys.Right, keyUp: true)
+        };
+
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
     private static void SelectPreviousWord()
@@ -106,6 +150,9 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetClipboardSequenceNumber();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

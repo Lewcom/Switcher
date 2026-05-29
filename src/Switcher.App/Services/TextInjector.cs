@@ -79,7 +79,7 @@ internal sealed class TextInjector
         try
         {
             previousClipboard = Clipboard.GetDataObject();
-            Clipboard.SetText(text);
+            Clipboard.SetDataObject(text, true);
             Thread.Sleep(20);
             SendCtrlKey(Keys.V);
             Thread.Sleep(20);
