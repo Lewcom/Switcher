@@ -4,6 +4,7 @@ namespace Switcher.App.Services;
 
 internal sealed class TextCaptureService
 {
+    private const uint WmCopy = 0x0301;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
@@ -37,28 +38,16 @@ internal sealed class TextCaptureService
             prepareSelection?.Invoke();
             Thread.Sleep(40);
 
-            SendCtrlCViaInput();
-            Thread.Sleep(60);
-
-            for (var attempt = 0; attempt < 8; attempt++)
+            if (TryCaptureFromClipboard(sentinel, operationId, stepName))
             {
-                if (Clipboard.ContainsText())
-                {
-                    var text = Clipboard.GetText();
-                    if (!string.IsNullOrEmpty(text) && !string.Equals(text, sentinel, StringComparison.Ordinal))
-                    {
-                        AppLogger.Step(
-                            operationId,
-                            stepName,
-                            $"result=ok length={text.Length} preview=\"{AppLogger.Preview(text)}\"");
-                        return text;
-                    }
-                }
-
-                Thread.Sleep(35);
+                return Clipboard.GetText();
             }
 
-            AppLogger.Step(operationId, stepName, "result=null reason=clipboard_timeout");
+            var finalText = Clipboard.ContainsText() ? Clipboard.GetText() : "<non-text>";
+            AppLogger.Step(
+                operationId,
+                stepName,
+                $"result=null reason=clipboard_timeout clipboard_preview=\"{AppLogger.Preview(finalText)}\"");
             return null;
         }
         catch (Exception ex)
@@ -80,6 +69,59 @@ internal sealed class TextCaptureService
                 }
             }
         }
+    }
+
+    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
+    {
+        // Strategy 1: SendKeys
+        SendKeys.SendWait("^c");
+        if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+        {
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
+            return true;
+        }
+
+        // Strategy 2: SendInput
+        SendCtrlCViaInput();
+        if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+        {
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
+            return true;
+        }
+
+        // Strategy 3: WM_COPY to foreground window
+        var foreground = GetForegroundWindow();
+        if (foreground != IntPtr.Zero)
+        {
+            SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool WaitForClipboardTextDifferentFrom(string sentinel, int timeoutMs)
+    {
+        var started = Environment.TickCount;
+        while (Environment.TickCount - started < timeoutMs)
+        {
+            if (Clipboard.ContainsText())
+            {
+                var text = Clipboard.GetText();
+                if (!string.IsNullOrEmpty(text) && !string.Equals(text, sentinel, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            Thread.Sleep(35);
+        }
+
+        return false;
     }
 
     private static void SendCtrlCViaInput()
@@ -123,6 +165,12 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
