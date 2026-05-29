@@ -73,19 +73,19 @@ internal sealed class TextCaptureService
     private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
     {
         // Primary strategy.
-        SendKeys.SendWait("^c");
+        SendCtrlCViaInput();
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
             return true;
         }
 
         // Single fallback strategy.
-        SendCtrlCViaInput();
+        SendKeys.SendWait("^c");
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}).");
-            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
+            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}, sendkeys).");
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
             return true;
         }
 
