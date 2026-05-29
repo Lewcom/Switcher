@@ -6,6 +6,7 @@ internal sealed class TextCaptureService
 {
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
+    private const uint WmCopy = 0x0301;
 
     public string? TryGetSelectedText(string operationId)
     {
@@ -37,12 +38,15 @@ internal sealed class TextCaptureService
             prepareSelection?.Invoke();
             Thread.Sleep(40);
 
-            if (TryCaptureFromClipboard(sentinel, operationId, stepName))
+            if (TryCaptureFromClipboard(sentinel, operationId, stepName, out var strategy))
             {
+                AppLogger.Info($"Copy success for op={operationId} step={stepName} strategy={strategy}.");
                 return Clipboard.GetText();
             }
 
             var finalText = Clipboard.ContainsText() ? Clipboard.GetText() : "<non-text>";
+            AppLogger.Info(
+                $"Copy failed for op={operationId} step={stepName} reason=clipboard_timeout preview=\"{AppLogger.Preview(finalText)}\".");
             AppLogger.Step(
                 operationId,
                 stepName,
@@ -70,22 +74,32 @@ internal sealed class TextCaptureService
         }
     }
 
-    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName)
+    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, out string strategy)
     {
+        strategy = "none";
+
         // Primary strategy.
         SendCtrlCViaInput();
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
+            strategy = "sendinput";
             AppLogger.Step(operationId, stepName, "copy_strategy=sendinput");
             return true;
         }
 
-        // Single fallback strategy.
-        SendKeys.SendWait("^c");
+        // Single fallback strategy (no SendKeys to avoid literal 'c' injection).
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
-            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}, sendkeys).");
-            AppLogger.Step(operationId, stepName, "copy_strategy=sendkeys");
+            strategy = "wm_copy_foreground";
+            AppLogger.Info($"Copy fallback used for op={operationId} ({stepName}, wm_copy_foreground).");
+            AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
             return true;
         }
 
@@ -153,6 +167,12 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
