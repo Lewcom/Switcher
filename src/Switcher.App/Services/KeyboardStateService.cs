@@ -6,6 +6,7 @@ internal static class KeyboardStateService
 {
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
+    private const int KeyPressedMask = 0x8000;
 
     public static void NormalizeAfterHotkey()
     {
@@ -16,6 +17,24 @@ internal static class KeyboardStateService
         SendKeyUp(Keys.LWin);
         SendKeyUp(Keys.RWin);
         SendPress(Keys.Escape);
+    }
+
+    public static void WaitForModifierRelease(int timeoutMs = 500)
+    {
+        var started = Environment.TickCount;
+        while (Environment.TickCount - started < timeoutMs)
+        {
+            if (!IsDown(Keys.ControlKey) &&
+                !IsDown(Keys.Menu) &&
+                !IsDown(Keys.ShiftKey) &&
+                !IsDown(Keys.LWin) &&
+                !IsDown(Keys.RWin))
+            {
+                return;
+            }
+
+            Thread.Sleep(10);
+        }
     }
 
     private static void SendPress(Keys key)
@@ -53,6 +72,14 @@ internal static class KeyboardStateService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private static bool IsDown(Keys key)
+    {
+        return (GetAsyncKeyState((int)key) & KeyPressedMask) != 0;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

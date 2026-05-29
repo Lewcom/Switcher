@@ -71,6 +71,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
+            KeyboardStateService.WaitForModifierRelease();
             await Task.Delay(40);
             KeyboardStateService.NormalizeAfterHotkey();
 

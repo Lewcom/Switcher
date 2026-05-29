@@ -7,6 +7,7 @@ internal sealed class HotkeyService : IDisposable
     private const int WmHotkey = 0x0312;
     private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
+    private const uint ModNoRepeat = 0x4000;
 
     private readonly HotkeyMessageWindow _window;
     private readonly int _hotkeyId;
@@ -31,7 +32,7 @@ internal sealed class HotkeyService : IDisposable
             modifiers |= ModAlt;
         }
 
-        _isRegistered = RegisterHotKey(_window.Handle, _hotkeyId, modifiers, (uint)key);
+        _isRegistered = RegisterHotKey(_window.Handle, _hotkeyId, modifiers | ModNoRepeat, (uint)key);
     }
 
     public bool IsRegistered => _isRegistered;
