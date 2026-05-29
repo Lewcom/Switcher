@@ -76,7 +76,7 @@ internal sealed class TextCaptureService
     {
         FocusTargetWindow(targetWindow);
         // Strategy 1: SendInput Ctrl+Insert
-        SendCopyViaInput(useInsert: true);
+        SendModifiedKeyViaInput(Keys.ControlKey, Keys.Insert);
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
             AppLogger.Step(operationId, stepName, "copy_strategy=sendinput_ctrl_insert");
@@ -85,10 +85,20 @@ internal sealed class TextCaptureService
 
         FocusTargetWindow(targetWindow);
         // Strategy 2: SendInput Ctrl+C
-        SendCopyViaInput(useInsert: false);
+        SendModifiedKeyViaInput(Keys.ControlKey, Keys.C);
         if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
         {
             AppLogger.Step(operationId, stepName, "copy_strategy=sendinput_ctrl_c");
+            return true;
+        }
+
+        FocusTargetWindow(targetWindow);
+        // Strategy 3: SendInput Ctrl+X (cut fallback when copy is blocked)
+        SendModifiedKeyViaInput(Keys.ControlKey, Keys.X);
+        if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
+        {
+            AppLogger.Info($"Cut fallback used for op={operationId} ({stepName}).");
+            AppLogger.Step(operationId, stepName, "copy_strategy=sendinput_ctrl_x");
             return true;
         }
 
@@ -127,15 +137,14 @@ internal sealed class TextCaptureService
         return false;
     }
 
-    private static void SendCopyViaInput(bool useInsert)
+    private static void SendModifiedKeyViaInput(Keys modifier, Keys key)
     {
-        var key = useInsert ? Keys.Insert : Keys.C;
         var inputs = new[]
         {
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
+            CreateVirtualKeyInput(modifier, keyUp: false),
             CreateVirtualKeyInput(key, keyUp: false),
             CreateVirtualKeyInput(key, keyUp: true),
-            CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
+            CreateVirtualKeyInput(modifier, keyUp: true)
         };
 
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
