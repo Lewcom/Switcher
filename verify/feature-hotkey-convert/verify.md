@@ -5,7 +5,7 @@
   - Unit-тести `LayoutConverter` (UA<->EN, punctuation, reversible, empty).
   - Збірку всього solution (`Switcher.App`, `Switcher.Core`, `Switcher.Core.Tests`).
 - Що не перевіряли:
-  - Повноцінні ручні e2e кейси в реальних застосунках (Notepad/Browser/Messenger).
+  - Повноцінні ручні e2e кейси в реальних застосунках (Notepad/Browser/Messenger) невалідні в цьому неінтерактивному середовищі агента.
 
 ## 2) Automated Tests
 | test | result | notes |
@@ -21,17 +21,17 @@
 ## 3) Manual Cases
 | case | expected | actual | result |
 |---|---|---|---|
-| Select text `ghbdsn` in Notepad + `Ctrl+Alt+L` | `привіт` replaces selection | not-run | not-run |
-| Cursor after `ghbdsn` without selection + `Ctrl+Alt+L` | last word converted to `привіт` | not-run | not-run |
-| Mixed text `ghbdsn, 123!` + convert | punctuation and digits stay unchanged | not-run | not-run |
-| Hotkey conflict (occupied combo) | app does not crash, warning shown/logged | not-run | not-run |
+| Select text `ghbdsn` in Notepad + `Ctrl+Alt+L` | `привіт` replaces selection | blocked in agent session | blocked |
+| Cursor after `ghbdsn` without selection + `Ctrl+Alt+L` | last word converted to `привіт` | blocked in agent session | blocked |
+| Mixed text `ghbdsn, 123!` + convert | punctuation and digits stay unchanged | blocked in agent session | blocked |
+| Hotkey conflict (occupied combo) | app does not crash, warning shown/logged | blocked in agent session | blocked |
 
 ## 4) Acceptance Criteria Check
 | criterion | status | evidence |
 |---|---|---|
-| AC1 | not-tested | code path in `TrayApplicationContext` + pending manual |
-| AC2 | not-tested | code path in `TrayApplicationContext` + pending manual |
-| AC3 | not-tested | latency measurement not executed yet |
+| AC1 | blocked | requires interactive desktop manual run |
+| AC2 | blocked | requires interactive desktop manual run |
+| AC3 | blocked | latency measurement pending interactive run |
 | AC4 | pass-partial | error paths wrapped, logging added |
 | AC5 | pass-partial | reversible mapping verified via unit test |
 | AC6 | pass | unit test confirms punctuation preservation |
@@ -40,6 +40,7 @@
 - Clipboard-dependent capture may fail in protected/sandboxed inputs.
 - Some applications may ignore synthetic key events.
 - Clipboard restore is best-effort and may race with user clipboard changes.
+- Manual e2e evidence is still required from local interactive session.
 
 ## 6) Recommendation
-- request changes (manual e2e verification required before merge to release branch)
+- request changes (run `scripts/manual-smoke-hotkey.ps1` locally and record outcomes)
