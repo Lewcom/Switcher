@@ -5,6 +5,7 @@ namespace Switcher.App.Services;
 
 internal sealed class TextInjector
 {
+    private const uint WmPaste = 0x0302;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
     private const uint KeyeventfUnicode = 0x0004;
@@ -17,6 +18,15 @@ internal sealed class TextInjector
         }
 
         FocusTargetWindow(targetWindow);
+
+        if (TryPasteViaFocusedWindow(replacement, targetWindow))
+        {
+            AppLogger.Step(
+                operationId,
+                "inject_wm_paste",
+                $"result=ok length={replacement.Length} preview=\"{AppLogger.Preview(replacement)}\"");
+            return true;
+        }
 
         if (TryPasteViaClipboard(replacement))
         {
@@ -127,11 +137,99 @@ internal sealed class TextInjector
         }
     }
 
+    private static bool TryPasteViaFocusedWindow(string text, IntPtr targetWindow)
+    {
+        IDataObject? previousClipboard = null;
+        try
+        {
+            previousClipboard = Clipboard.GetDataObject();
+            Clipboard.SetDataObject(text, true);
+            Thread.Sleep(15);
+
+            var focused = GetFocusedHandle(targetWindow);
+            if (focused == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            SendMessage(focused, WmPaste, IntPtr.Zero, IntPtr.Zero);
+            Thread.Sleep(15);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (previousClipboard is not null)
+            {
+                try
+                {
+                    Clipboard.SetDataObject(previousClipboard, true);
+                }
+                catch
+                {
+                    // Best effort restore only.
+                }
+            }
+        }
+    }
+
+    private static IntPtr GetFocusedHandle(IntPtr targetWindow)
+    {
+        if (targetWindow == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        var threadId = GetWindowThreadProcessId(targetWindow, out _);
+        var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
+        if (threadId != 0 && GetGUIThreadInfo(threadId, ref info))
+        {
+            return info.hwndFocus;
+        }
+
+        return IntPtr.Zero;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int cbSize;
+        public uint flags;
+        public IntPtr hwndActive;
+        public IntPtr hwndFocus;
+        public IntPtr hwndCapture;
+        public IntPtr hwndMenuOwner;
+        public IntPtr hwndMoveSize;
+        public IntPtr hwndCaret;
+        public RECT rcCaret;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT

@@ -5,6 +5,7 @@ namespace Switcher.App.Services;
 internal sealed class TextCaptureService
 {
     private const uint WmCopy = 0x0301;
+    private const uint WmCut = 0x0300;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
@@ -74,6 +75,17 @@ internal sealed class TextCaptureService
 
     private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, IntPtr targetWindow)
     {
+        var focused = GetFocusedHandle(targetWindow);
+        if (focused != IntPtr.Zero)
+        {
+            SendMessage(focused, WmCopy, IntPtr.Zero, IntPtr.Zero);
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 450))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_focused");
+                return true;
+            }
+        }
+
         FocusTargetWindow(targetWindow);
         // Strategy 1: SendInput Ctrl+Insert
         SendModifiedKeyViaInput(Keys.ControlKey, Keys.Insert);
@@ -102,14 +114,12 @@ internal sealed class TextCaptureService
             return true;
         }
 
-        // Strategy 3: WM_COPY to foreground window
-        var foreground = GetForegroundWindow();
-        if (foreground != IntPtr.Zero)
+        if (focused != IntPtr.Zero)
         {
-            SendMessage(foreground, WmCopy, IntPtr.Zero, IntPtr.Zero);
+            SendMessage(focused, WmCut, IntPtr.Zero, IntPtr.Zero);
             if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
             {
-                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_foreground");
+                AppLogger.Step(operationId, stepName, "copy_strategy=wm_cut_focused");
                 return true;
             }
         }
@@ -169,6 +179,24 @@ internal sealed class TextCaptureService
         }
     }
 
+    private static IntPtr GetFocusedHandle(IntPtr targetWindow)
+    {
+        if (targetWindow == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        _ = GetWindowThreadProcessId(targetWindow, out _);
+        var threadId = GetWindowThreadProcessId(targetWindow, out _);
+        var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
+        if (threadId != 0 && GetGUIThreadInfo(threadId, ref info))
+        {
+            return info.hwndFocus;
+        }
+
+        return IntPtr.Zero;
+    }
+
     private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
     {
         return new INPUT
@@ -190,6 +218,35 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int cbSize;
+        public uint flags;
+        public IntPtr hwndActive;
+        public IntPtr hwndFocus;
+        public IntPtr hwndCapture;
+        public IntPtr hwndMenuOwner;
+        public IntPtr hwndMoveSize;
+        public IntPtr hwndCaret;
+        public RECT rcCaret;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
