@@ -4,6 +4,9 @@ namespace Switcher.App.Services;
 
 internal sealed class TextCaptureService
 {
+    private const uint InputKeyboard = 1;
+    private const uint KeyeventfKeyup = 0x0002;
+
     public string? TryGetSelectedText(string operationId)
     {
         return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected");
@@ -24,28 +27,25 @@ internal sealed class TextCaptureService
     private static string? CaptureCopiedText(Action? prepareSelection, string operationId, string stepName)
     {
         IDataObject? previousClipboard = null;
-        var initialClipboardSeq = GetClipboardSequenceNumber();
+        var sentinel = "__sw_capture_" + Guid.NewGuid().ToString("N");
         try
         {
             KeyboardStateService.NormalizeAfterHotkey();
             previousClipboard = Clipboard.GetDataObject();
+            Clipboard.SetText(sentinel);
 
             prepareSelection?.Invoke();
-            Thread.Sleep(30);
+            Thread.Sleep(40);
 
-            SendCtrlKey(Keys.C);
-            if (!WaitForClipboardChange(initialClipboardSeq, 250))
-            {
-                AppLogger.Step(operationId, stepName, "result=null reason=clipboard_timeout");
-                return null;
-            }
+            SendCtrlCViaInput();
+            Thread.Sleep(60);
 
-            for (var attempt = 0; attempt < 3; attempt++)
+            for (var attempt = 0; attempt < 8; attempt++)
             {
                 if (Clipboard.ContainsText())
                 {
                     var text = Clipboard.GetText();
-                    if (!string.IsNullOrEmpty(text))
+                    if (!string.IsNullOrEmpty(text) && !string.Equals(text, sentinel, StringComparison.Ordinal))
                     {
                         AppLogger.Step(
                             operationId,
@@ -55,10 +55,10 @@ internal sealed class TextCaptureService
                     }
                 }
 
-                Thread.Sleep(30);
+                Thread.Sleep(35);
             }
 
-            AppLogger.Step(operationId, stepName, "result=null reason=no_text_after_retries");
+            AppLogger.Step(operationId, stepName, "result=null reason=clipboard_timeout");
             return null;
         }
         catch (Exception ex)
@@ -82,20 +82,17 @@ internal sealed class TextCaptureService
         }
     }
 
-    private static bool WaitForClipboardChange(uint initialSequence, int timeoutMs)
+    private static void SendCtrlCViaInput()
     {
-        var started = Environment.TickCount;
-        while (Environment.TickCount - started < timeoutMs)
+        var inputs = new[]
         {
-            if (GetClipboardSequenceNumber() != initialSequence)
-            {
-                return true;
-            }
+            CreateVirtualKeyInput(Keys.ControlKey, keyUp: false),
+            CreateVirtualKeyInput(Keys.C, keyUp: false),
+            CreateVirtualKeyInput(Keys.C, keyUp: true),
+            CreateVirtualKeyInput(Keys.ControlKey, keyUp: true)
+        };
 
-            Thread.Sleep(10);
-        }
-
-        return false;
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
     private static void CollapseSelectionToCaret()
@@ -108,18 +105,46 @@ internal sealed class TextCaptureService
         SendKeys.SendWait("^+{LEFT}");
     }
 
-    private static void SendCtrlKey(Keys key)
+    private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
     {
-        if (key == Keys.C)
+        return new INPUT
         {
-            SendKeys.SendWait("^c");
-        }
-        else
-        {
-            SendKeys.SendWait("^" + key.ToString().ToLowerInvariant());
-        }
+            type = InputKeyboard,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = (ushort)key,
+                    dwFlags = keyUp ? KeyeventfKeyup : 0
+                }
+            }
+        };
     }
 
-    [DllImport("user32.dll")]
-    private static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public InputUnion U;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)]
+        public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
 }
