@@ -21,10 +21,31 @@ public class LayoutConverterTests
     }
 
     [Fact]
-    public void Convert_PreservesPunctuationSpacesAndDigits()
+    public void Convert_PreservesSpacesAndDigits()
+    {
+        var actual = _converter.Convert("ghbdsn 123!");
+        Assert.Equal("привіт 123!", actual);
+    }
+
+    [Fact]
+    public void Convert_ConvertsCommaKeyToUkrainianLetterBeInKeyMapMode()
     {
         var actual = _converter.Convert("ghbdsn, 123!");
-        Assert.Equal("привіт, 123!", actual);
+        Assert.Equal("привітб 123!", actual);
+    }
+
+    [Fact]
+    public void Convert_MapsCommaKeyToUkrainianBe()
+    {
+        var actual = _converter.Convert(",");
+        Assert.Equal("б", actual);
+    }
+
+    [Fact]
+    public void Convert_MapsShiftedPunctuationToUkrainianLayoutSymbols()
+    {
+        var actual = _converter.Convert("<>?");
+        Assert.Equal("БЮ,", actual);
     }
 
     [Fact]

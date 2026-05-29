@@ -33,18 +33,30 @@ public sealed class LayoutConverter
 
     private static Dictionary<char, char> BuildEnToUaMap()
     {
-        const string enLower = "qwertyuiop[]asdfghjkl;'zxcvbnm";
-        const string uaLower = "йцукенгшщзхїфівапролджєячсмить";
+        const string enLower = "qwertyuiop[]asdfghjkl;'zxcvbnm,./";
+        const string uaLower = "йцукенгшщзхїфівапролджєячсмитьбю.";
 
-        var map = new Dictionary<char, char>(enLower.Length * 2);
+        var map = new Dictionary<char, char>(enLower.Length * 2 + 16);
         for (var i = 0; i < enLower.Length; i++)
         {
             var en = enLower[i];
             var ua = uaLower[i];
 
             map[en] = ua;
-            map[char.ToUpperInvariant(en)] = char.ToUpperInvariant(ua);
+            if (char.IsLetter(en))
+            {
+                map[char.ToUpperInvariant(en)] = char.ToUpperInvariant(ua);
+            }
         }
+
+        // Shift variants for keys where ToUpperInvariant does not represent keyboard shift.
+        map['<'] = 'Б';
+        map['>'] = 'Ю';
+        map['?'] = ',';
+        map['{'] = 'Х';
+        map['}'] = 'Ї';
+        map[':'] = 'Ж';
+        map['"'] = 'Є';
 
         return map;
     }
