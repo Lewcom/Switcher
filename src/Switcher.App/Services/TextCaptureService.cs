@@ -7,23 +7,24 @@ internal sealed class TextCaptureService
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
-    public string? TryGetSelectedText()
+    public string? TryGetSelectedText(string operationId)
     {
-        return CaptureCopiedText(prepareSelection: null);
+        return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected");
     }
 
-    public string? TryGetLastWordBySelection()
+    public string? TryGetLastWordBySelection(string operationId)
     {
-        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord);
+        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord, operationId, "capture_last_word");
         if (captured is null)
         {
             CollapseSelectionToCaret();
+            AppLogger.Step(operationId, "capture_last_word", "result=null collapsed_selection=true");
         }
 
         return captured;
     }
 
-    private static string? CaptureCopiedText(Action? prepareSelection)
+    private static string? CaptureCopiedText(Action? prepareSelection, string operationId, string stepName)
     {
         IDataObject? previousClipboard = null;
         var initialClipboardSeq = GetClipboardSequenceNumber();
@@ -38,6 +39,7 @@ internal sealed class TextCaptureService
             SendCtrlKey(Keys.C);
             if (!WaitForClipboardChange(initialClipboardSeq, 250))
             {
+                AppLogger.Step(operationId, stepName, "result=null reason=clipboard_timeout");
                 return null;
             }
 
@@ -48,6 +50,10 @@ internal sealed class TextCaptureService
                     var text = Clipboard.GetText();
                     if (!string.IsNullOrEmpty(text))
                     {
+                        AppLogger.Step(
+                            operationId,
+                            stepName,
+                            $"result=ok length={text.Length} preview=\"{AppLogger.Preview(text)}\"");
                         return text;
                     }
                 }
@@ -55,10 +61,12 @@ internal sealed class TextCaptureService
                 Thread.Sleep(30);
             }
 
+            AppLogger.Step(operationId, stepName, "result=null reason=no_text_after_retries");
             return null;
         }
-        catch
+        catch (Exception ex)
         {
+            AppLogger.Error($"{stepName} failed for op={operationId}", ex);
             return null;
         }
         finally

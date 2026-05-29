@@ -9,7 +9,7 @@ internal sealed class TextInjector
     private const uint KeyeventfKeyup = 0x0002;
     private const uint KeyeventfUnicode = 0x0004;
 
-    public bool ReplaceSelection(string replacement)
+    public bool ReplaceSelection(string replacement, string operationId)
     {
         if (replacement is null)
         {
@@ -18,10 +18,21 @@ internal sealed class TextInjector
 
         if (TryPasteViaClipboard(replacement))
         {
+            AppLogger.Step(
+                operationId,
+                "inject_clipboard",
+                $"result=ok length={replacement.Length} preview=\"{AppLogger.Preview(replacement)}\"");
             return true;
         }
 
-        return TryTypeUnicode(replacement);
+        var unicodeResult = TryTypeUnicode(replacement);
+        AppLogger.Step(
+            operationId,
+            "inject_unicode",
+            unicodeResult
+                ? $"result=ok length={replacement.Length} preview=\"{AppLogger.Preview(replacement)}\""
+                : "result=fail");
+        return unicodeResult;
     }
 
     private static bool TryTypeUnicode(string text)

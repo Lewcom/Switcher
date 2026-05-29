@@ -18,6 +18,27 @@ internal static class AppLogger
         Write("ERROR", details);
     }
 
+    public static void Step(string operationId, string step, string details)
+    {
+        Write("TRACE", $"op={operationId} step={step} {details}");
+    }
+
+    public static string Preview(string value, int maxLen = 24)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "<empty>";
+        }
+
+        var normalized = value.Replace("\r", "\\r").Replace("\n", "\\n");
+        if (normalized.Length <= maxLen)
+        {
+            return normalized;
+        }
+
+        return normalized[..maxLen] + "...";
+    }
+
     private static void Write(string level, string message)
     {
         try
