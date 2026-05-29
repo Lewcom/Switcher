@@ -21,15 +21,15 @@
 ## 3) Manual Cases
 | case | expected | actual | result |
 |---|---|---|---|
-| Select text `ghbdsn` in Notepad + `Ctrl+Alt+L` | `привіт` replaces selection | blocked in agent session | blocked |
-| Cursor after `ghbdsn` without selection + `Ctrl+Alt+L` | last word converted to `привіт` | blocked in agent session | blocked |
+| Select text `ghbdsn` in Notepad + `Ctrl+Alt+L` | `привіт` replaces selection | pending retest | not-run |
+| Cursor after `ghbdsn` without selection + `Ctrl+Alt+L` | last word converted to `привіт` | pass (`op=c207aa3f`, `path=last_word`, `replaced=True`) | pass |
 | Mixed text `ghbdsn, 123!` + convert | punctuation and digits stay unchanged | blocked in agent session | blocked |
 | Hotkey conflict (occupied combo) | app does not crash, warning shown/logged | blocked in agent session | blocked |
 
 ## 4) Acceptance Criteria Check
 | criterion | status | evidence |
 |---|---|---|
-| AC1 | blocked | requires interactive desktop manual run |
+| AC1 | pass | interactive log op `c207aa3f` shows convert+inject success for last-word flow |
 | AC2 | blocked | requires interactive desktop manual run |
 | AC3 | blocked | latency measurement pending interactive run |
 | AC4 | pass-partial | error paths wrapped, logging added |
