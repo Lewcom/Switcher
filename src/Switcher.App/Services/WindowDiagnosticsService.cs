@@ -6,6 +6,17 @@ namespace Switcher.App.Services;
 
 internal static class WindowDiagnosticsService
 {
+    public static bool IsChromiumWindow(IntPtr targetWindow)
+    {
+        if (targetWindow == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var className = GetWindowClassName(targetWindow);
+        return string.Equals(className, "Chrome_WidgetWin_1", StringComparison.Ordinal);
+    }
+
     public static string DescribeWindowContext(IntPtr targetWindow)
     {
         if (targetWindow == IntPtr.Zero)

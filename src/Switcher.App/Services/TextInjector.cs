@@ -10,7 +10,7 @@ internal sealed class TextInjector
     private const uint KeyeventfKeyup = 0x0002;
     private const uint KeyeventfUnicode = 0x0004;
 
-    public bool ReplaceSelection(string replacement, string operationId, IntPtr targetWindow)
+    public bool ReplaceSelection(string replacement, string operationId, IntPtr targetWindow, bool chromiumMode)
     {
         if (replacement is null)
         {
@@ -19,12 +19,17 @@ internal sealed class TextInjector
 
         FocusTargetWindow(targetWindow);
 
-        if (TryPasteViaFocusedWindow(replacement, targetWindow))
+        if (!chromiumMode && TryPasteViaFocusedWindow(replacement, targetWindow))
         {
             AppLogger.Step(
                 operationId,
                 "inject_wm_paste",
                 $"result=ok length={replacement.Length} preview=\"{AppLogger.Preview(replacement)}\"");
+            return true;
+        }
+
+        if (chromiumMode && TryPasteViaClipboardKeyboard(replacement, operationId))
+        {
             return true;
         }
 
@@ -115,6 +120,41 @@ internal sealed class TextInjector
             Thread.Sleep(20);
             SendKeys.SendWait("^v");
             Thread.Sleep(20);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (previousClipboard is not null)
+            {
+                try
+                {
+                    Clipboard.SetDataObject(previousClipboard, true);
+                }
+                catch
+                {
+                    // Best effort restore only.
+                }
+            }
+        }
+    }
+
+    private static bool TryPasteViaClipboardKeyboard(string text, string operationId)
+    {
+        IDataObject? previousClipboard = null;
+        try
+        {
+            previousClipboard = Clipboard.GetDataObject();
+            Clipboard.SetDataObject(text, true);
+            Thread.Sleep(20);
+            SendKeys.SendWait("^v");
+            AppLogger.Step(
+                operationId,
+                "inject_chromium_keyboard",
+                $"result=ok strategy=sendkeys_ctrl_v length={text.Length} preview=\"{AppLogger.Preview(text)}\"");
             return true;
         }
         catch

@@ -72,10 +72,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         var operationId = Guid.NewGuid().ToString("N")[..8];
         var targetWindow = GetForegroundWindow();
+        var chromiumMode = WindowDiagnosticsService.IsChromiumWindow(targetWindow);
         try
         {
             AppLogger.Step(operationId, "hotkey_start", "combo=Ctrl+Alt+L");
             AppLogger.Info($"Window context op={operationId}: {WindowDiagnosticsService.DescribeWindowContext(targetWindow)}");
+            AppLogger.Info($"Input mode op={operationId}: {(chromiumMode ? "chromium" : "win32")}.");
             KeyboardStateService.WaitForModifierRelease();
             await Task.Delay(40);
             KeyboardStateService.NormalizeAfterHotkey();
@@ -84,7 +86,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 SetForegroundWindow(targetWindow);
             }
 
-            var selectedText = _textCaptureService.TryGetSelectedText(operationId, targetWindow);
+            var selectedText = _textCaptureService.TryGetSelectedText(operationId, targetWindow, chromiumMode);
             if (!string.IsNullOrEmpty(selectedText))
             {
                 var converted = _layoutConverter.Convert(selectedText);
@@ -93,12 +95,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
                     "convert_selected",
                     $"in_len={selectedText.Length} out_len={converted.Length} out_preview=\"{AppLogger.Preview(converted)}\"");
 
-                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow);
+                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow, chromiumMode);
                 AppLogger.Step(operationId, "done", $"path=selected replaced={replaced}");
                 return;
             }
 
-            var lastWord = _textCaptureService.TryGetLastWordBySelection(operationId, targetWindow);
+            var lastWord = _textCaptureService.TryGetLastWordBySelection(operationId, targetWindow, chromiumMode);
             if (!string.IsNullOrEmpty(lastWord))
             {
                 var converted = _layoutConverter.Convert(lastWord);
@@ -107,7 +109,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                     "convert_last_word",
                     $"in_len={lastWord.Length} out_len={converted.Length} out_preview=\"{AppLogger.Preview(converted)}\"");
 
-                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow);
+                var replaced = _textInjector.ReplaceSelection(converted, operationId, targetWindow, chromiumMode);
                 AppLogger.Step(operationId, "done", $"path=last_word replaced={replaced}");
                 return;
             }

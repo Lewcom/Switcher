@@ -10,14 +10,14 @@ internal sealed class TextCaptureService
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
 
-    public string? TryGetSelectedText(string operationId, IntPtr targetWindow)
+    public string? TryGetSelectedText(string operationId, IntPtr targetWindow, bool chromiumMode)
     {
-        return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected", targetWindow);
+        return CaptureCopiedText(prepareSelection: null, operationId, "capture_selected", targetWindow, chromiumMode);
     }
 
-    public string? TryGetLastWordBySelection(string operationId, IntPtr targetWindow)
+    public string? TryGetLastWordBySelection(string operationId, IntPtr targetWindow, bool chromiumMode)
     {
-        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord, operationId, "capture_last_word", targetWindow);
+        var captured = CaptureCopiedText(prepareSelection: SelectPreviousWord, operationId, "capture_last_word", targetWindow, chromiumMode);
         if (captured is null)
         {
             CollapseSelectionToCaret();
@@ -27,7 +27,12 @@ internal sealed class TextCaptureService
         return captured;
     }
 
-    private static string? CaptureCopiedText(Action? prepareSelection, string operationId, string stepName, IntPtr targetWindow)
+    private static string? CaptureCopiedText(
+        Action? prepareSelection,
+        string operationId,
+        string stepName,
+        IntPtr targetWindow,
+        bool chromiumMode)
     {
         IDataObject? previousClipboard = null;
         var sentinel = "__sw_capture_" + Guid.NewGuid().ToString("N");
@@ -41,7 +46,7 @@ internal sealed class TextCaptureService
             prepareSelection?.Invoke();
             Thread.Sleep(40);
 
-            if (TryCaptureFromClipboard(sentinel, operationId, stepName, targetWindow))
+            if (TryCaptureFromClipboard(sentinel, operationId, stepName, targetWindow, chromiumMode))
             {
                 return Clipboard.GetText();
             }
@@ -74,8 +79,42 @@ internal sealed class TextCaptureService
         }
     }
 
-    private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, IntPtr targetWindow)
+    private static bool TryCaptureFromClipboard(
+        string sentinel,
+        string operationId,
+        string stepName,
+        IntPtr targetWindow,
+        bool chromiumMode)
     {
+        if (chromiumMode)
+        {
+            FocusTargetWindow(targetWindow);
+            SendKeys.SendWait("^c");
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 550))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=chromium_sendkeys_ctrl_c");
+                return true;
+            }
+
+            FocusTargetWindow(targetWindow);
+            SendKeys.SendWait("^{INSERT}");
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 550))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=chromium_sendkeys_ctrl_insert");
+                return true;
+            }
+
+            FocusTargetWindow(targetWindow);
+            SendModifiedKeyViaInput(Keys.ControlKey, Keys.C);
+            if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 550))
+            {
+                AppLogger.Step(operationId, stepName, "copy_strategy=chromium_sendinput_ctrl_c");
+                return true;
+            }
+
+            return false;
+        }
+
         var focused = GetFocusedHandle(targetWindow);
         foreach (var handle in EnumerateWindowChain(focused, targetWindow))
         {
