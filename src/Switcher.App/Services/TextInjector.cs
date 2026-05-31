@@ -147,14 +147,15 @@ internal sealed class TextInjector
             Thread.Sleep(15);
 
             var focused = GetFocusedHandle(targetWindow);
-            if (focused == IntPtr.Zero)
+            var sent = false;
+            foreach (var handle in EnumerateWindowChain(focused, targetWindow))
             {
-                return false;
+                SendMessage(handle, WmPaste, IntPtr.Zero, IntPtr.Zero);
+                Thread.Sleep(12);
+                sent = true;
             }
 
-            SendMessage(focused, WmPaste, IntPtr.Zero, IntPtr.Zero);
-            Thread.Sleep(15);
-            return true;
+            return sent;
         }
         catch
         {
@@ -193,6 +194,27 @@ internal sealed class TextInjector
         return IntPtr.Zero;
     }
 
+    private static IEnumerable<IntPtr> EnumerateWindowChain(IntPtr focused, IntPtr targetWindow)
+    {
+        var seen = new HashSet<IntPtr>();
+        var current = focused;
+        while (current != IntPtr.Zero && seen.Add(current))
+        {
+            yield return current;
+            if (current == targetWindow)
+            {
+                yield break;
+            }
+
+            current = GetParent(current);
+        }
+
+        if (targetWindow != IntPtr.Zero && seen.Add(targetWindow))
+        {
+            yield return targetWindow;
+        }
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
@@ -207,6 +229,9 @@ internal sealed class TextInjector
 
     [DllImport("user32.dll")]
     private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetParent(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO

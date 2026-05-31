@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Switcher.App.Services;
 
@@ -76,12 +77,15 @@ internal sealed class TextCaptureService
     private static bool TryCaptureFromClipboard(string sentinel, string operationId, string stepName, IntPtr targetWindow)
     {
         var focused = GetFocusedHandle(targetWindow);
-        if (focused != IntPtr.Zero)
+        foreach (var handle in EnumerateWindowChain(focused, targetWindow))
         {
-            SendMessage(focused, WmCopy, IntPtr.Zero, IntPtr.Zero);
+            SendMessage(handle, WmCopy, IntPtr.Zero, IntPtr.Zero);
             if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 450))
             {
-                AppLogger.Step(operationId, stepName, "copy_strategy=wm_copy_focused");
+                AppLogger.Step(
+                    operationId,
+                    stepName,
+                    $"copy_strategy=wm_copy_chain handle=0x{handle.ToInt64():X} class={GetWindowClassName(handle)}");
                 return true;
             }
         }
@@ -114,12 +118,15 @@ internal sealed class TextCaptureService
             return true;
         }
 
-        if (focused != IntPtr.Zero)
+        foreach (var handle in EnumerateWindowChain(focused, targetWindow))
         {
-            SendMessage(focused, WmCut, IntPtr.Zero, IntPtr.Zero);
+            SendMessage(handle, WmCut, IntPtr.Zero, IntPtr.Zero);
             if (WaitForClipboardTextDifferentFrom(sentinel, timeoutMs: 500))
             {
-                AppLogger.Step(operationId, stepName, "copy_strategy=wm_cut_focused");
+                AppLogger.Step(
+                    operationId,
+                    stepName,
+                    $"copy_strategy=wm_cut_chain handle=0x{handle.ToInt64():X} class={GetWindowClassName(handle)}");
                 return true;
             }
         }
@@ -197,6 +204,33 @@ internal sealed class TextCaptureService
         return IntPtr.Zero;
     }
 
+    private static IEnumerable<IntPtr> EnumerateWindowChain(IntPtr focused, IntPtr targetWindow)
+    {
+        var seen = new HashSet<IntPtr>();
+        var current = focused;
+        while (current != IntPtr.Zero && seen.Add(current))
+        {
+            yield return current;
+            if (current == targetWindow)
+            {
+                yield break;
+            }
+
+            current = GetParent(current);
+        }
+
+        if (targetWindow != IntPtr.Zero && seen.Add(targetWindow))
+        {
+            yield return targetWindow;
+        }
+    }
+
+    private static string GetWindowClassName(IntPtr hWnd)
+    {
+        var buffer = new StringBuilder(256);
+        return GetClassName(hWnd, buffer, buffer.Capacity) > 0 ? buffer.ToString() : "<unknown>";
+    }
+
     private static INPUT CreateVirtualKeyInput(Keys key, bool keyUp)
     {
         return new INPUT
@@ -218,6 +252,12 @@ internal sealed class TextCaptureService
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetParent(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
